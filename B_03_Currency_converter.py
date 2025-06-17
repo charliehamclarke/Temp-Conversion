@@ -1,15 +1,7 @@
 from tkinter import *
 from functools import partial
 from datetime import date
-
-EXCHANGE_RATES = {
-    ("USD", "NZD"): 1.6,
-    ("NZD", "AUD"): 0.93,
-    ("AUD", "USD"): 0.67,
-    ("NZD", "USD"): 0.63,
-    ("USD", "AUD"): 1.5,
-    ("AUD", "NZD"): 1.08,
-}
+import requests
 
 
 class Converter:
@@ -76,29 +68,37 @@ class Converter:
 
         try:
             to_convert = float(to_convert)
-            if to_convert >= 0:
-                self.convert(from_currency, to_currency, to_convert)
-            else:
-                self.answer_error.config(text="Amount must be 0 or more", fg="#9C0000")
+            if to_convert <= 0:
+                self.answer_error.config(text="Amount must be more than 0", fg="#9C0000")
                 self.temp_entry.config(bg="#F4CCCC")
-                self.temp_entry.delete(0, END)
+            elif to_convert > 10000:
+                self.answer_error.config(text="Maximum amount is 10,000", fg="#9C0000")
+                self.temp_entry.config(bg="#F4CCCC")
+            else:
+                self.convert(from_currency, to_currency, to_convert)
         except ValueError:
             self.answer_error.config(text="Please enter a number", fg="#9C0000")
             self.temp_entry.config(bg="#F4CCCC")
-            self.temp_entry.delete(0, END)
+
+        self.temp_entry.delete(0, END)
 
     def convert(self, from_currency, to_currency, amount):
-        rate = EXCHANGE_RATES.get((from_currency, to_currency), None)
+        try:
+            url = f"https://api.exchangerate-api.com/v4/latest/{from_currency}"
+            response = requests.get(url, timeout=5)
+            data = response.json()
 
-        if rate is None:
-            answer_statement = "Conversion not available."
-        else:
+            if to_currency not in data['rates']:
+                raise ValueError("Currency not supported")
+
+            rate = data['rates'][to_currency]
             converted = round(amount * rate, 2)
             answer_statement = f"{amount} {from_currency} is {converted} {to_currency}"
             self.to_history_button.config(state=NORMAL)
             self.all_calculations_list.append(answer_statement)
-
-        self.answer_error.config(text=answer_statement)
+            self.answer_error.config(text=answer_statement, fg="#004C99")
+        except Exception as e:
+            self.answer_error.config(text=f"Error: {str(e)}", fg="#9C0000")
 
     def to_help(self):
         DisplayHelp(self)
@@ -125,7 +125,7 @@ class DisplayHelp:
 
         help_text = ("To use the program, enter the amount of money you'd "
                      "like to convert. Then choose a conversion type "
-                     "(e.g. USD to NZD). Exchange rates are approximate.\n\n"
+                     "(e.g. USD to NZD). Rates are updated live from the internet.\n\n"
                      "You can view your conversion history and export it to "
                      "a text file using the 'History / Export' button.")
 
